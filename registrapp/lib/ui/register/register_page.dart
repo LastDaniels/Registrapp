@@ -1,58 +1,95 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/products_provider.dart';
 import '../shared/product_card_placeholder.dart';
 
-class RegisterPage extends StatefulWidget {
+class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  ConsumerState<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
-  final Map<String, _CartLine> cart = {};
+class _RegisterPageState extends ConsumerState<RegisterPage> {
+  final Map<int, _CartLine> cart = {}; // key = product.id
   String customer = '';
 
-  // MOCK de productos (Semana 1). Semana 2 lo cambiaremos por DB.
-  final products = const [
-    ('Arroz con pollo', 4.50, 12.0),
-    ('Seco de pollo', 4.50, 12.0),
-    ('Jugo de naranja', 1.20, 12.0),
-    ('Sopa del día', 2.00, 12.0),
-    ('Empanada', 0.80, 12.0),
-    ('Gaseosa', 1.00, 12.0),
-  ];
+  // --- helpers de impuestos con IVA incluido ---
+  double _baseUnit(double priceWithIva, double ivaPct) {
+    final factor = 1 + (ivaPct / 100.0);
+    return priceWithIva / factor;
+  }
 
-  double get subtotal =>
-      cart.values.fold(0, (p, e) => p + (e.price * e.qty));
-  double get iva =>
-      cart.values.fold(0, (p, e) => p + ((e.price * e.ivaPct / 100) * e.qty));
-  double get total => subtotal + iva;
+  double _ivaUnit(double priceWithIva, double ivaPct) {
+    return priceWithIva - _baseUnit(priceWithIva, ivaPct);
+  }
 
-  void _inc(String name, double price, double ivaPct) {
+  // subtotal sin IVA (suma de bases)
+  double get subtotal {
+    double sum = 0;
+    for (final line in cart.values) {
+      final baseUnit = _baseUnit(line.price, line.ivaPct);
+      sum += baseUnit * line.qty;
+    }
+    return sum;
+  }
+
+  // total IVA (suma de solo IVA)
+  double get iva {
+    double sum = 0;
+    for (final line in cart.values) {
+      final ivaUnit = _ivaUnit(line.price, line.ivaPct);
+      sum += ivaUnit * line.qty;
+    }
+    return sum;
+  }
+
+  // total final cobrado (precio con IVA * qty)
+  double get total {
+    double sum = 0;
+    for (final line in cart.values) {
+      sum += line.price * line.qty;
+    }
+    return sum;
+  }
+
+  void _inc({
+    required int id,
+    required String name,
+    required double price,
+    required double ivaPct,
+  }) {
     setState(() {
       cart.update(
-        name,
-        (l) => l.copyWith(qty: l.qty + 1),
-        ifAbsent: () => _CartLine(name, price, ivaPct, 1),
+        id,
+        (line) => line.copyWith(qty: line.qty + 1),
+        ifAbsent: () => _CartLine(
+          id: id,
+          name: name,
+          price: price,
+          ivaPct: ivaPct,
+          qty: 1,
+        ),
       );
     });
   }
 
-  void _dec(String name) {
+  void _dec(int id) {
     setState(() {
-      final l = cart[name];
-      if (l == null) return;
-      final q = l.qty - 1;
+      final line = cart[id];
+      if (line == null) return;
+      final q = line.qty - 1;
       if (q <= 0) {
-        cart.remove(name);
+        cart.remove(id);
       } else {
-        cart[name] = l.copyWith(qty: q);
+        cart[id] = line.copyWith(qty: q);
       }
     });
   }
 
   Future<void> _askCustomerAndRegister() async {
     final ctrl = TextEditingController(text: customer);
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -62,23 +99,38 @@ class _RegisterPageState extends State<RegisterPage> {
           children: [
             const Text('Ingresa el nombre del cliente (opcional).'),
             const SizedBox(height: 8),
-            TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Cliente')),
+            TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(labelText: 'Cliente'),
+            ),
             const SizedBox(height: 8),
-            Text('Total: \$${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Total: \$${total.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Registrar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Registrar'),
+          ),
         ],
       ),
     );
+
     if (ok == true) {
       setState(() {
         customer = ctrl.text.trim();
-        // Semana 1: solo limpiamos carrito (mock de “registrado”).
+        // Semana 2: todavía no guardamos en tabla de ventas.
         cart.clear();
       });
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Venta registrada (sin impresión).')),
       );
@@ -87,125 +139,212 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final productsAsync = ref.watch(productsStreamProvider);
     final isWide = MediaQuery.of(context).size.width >= 900;
-
-    final left = GridView.count(
-      crossAxisCount: isWide ? 3 : 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      children: [
-        for (final p in products)
-          ProductCardPlaceholder(
-            title: p.$1,
-            price: p.$2,
-            onAdd: () => _inc(p.$1, p.$2, p.$3),
-          ),
-      ],
-    );
-
-    final right = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Detalle', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Expanded(
-          child: ListView.separated(
-            itemCount: cart.length,
-            itemBuilder: (_, i) {
-              final line = cart.values.elementAt(i);
-              final lineTotal = (line.price + line.price * line.ivaPct / 100) * line.qty;
-              return ListTile(
-                title: Text(line.name),
-                subtitle: Text('Item  |  Precio: \$${line.price.toStringAsFixed(2)}  |  IVA ${line.ivaPct.toStringAsFixed(0)}%'),
-                trailing: SizedBox(
-                  width: 140,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(onPressed: () => _dec(line.name), icon: const Icon(Icons.remove)),
-                      Text(line.qty.toString()),
-                      IconButton(onPressed: () => _inc(line.name, line.price, line.ivaPct), icon: const Icon(Icons.add)),
-                      const SizedBox(width: 8),
-                      Text('\$${lineTotal.toStringAsFixed(2)}'),
-                    ],
-                  ),
-                ),
-              );
-            },
-            separatorBuilder: (_, __) => const Divider(height: 1),
-          ),
-        ),
-        const Divider(),
-        _totals(context),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => cart.clear()),
-                child: const Text('Vaciar'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: cart.isEmpty ? null : _askCustomerAndRegister,
-                child: const Text('Registrar (sin imprimir)'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: isWide
-          ? Row(
-              children: [
-                Expanded(flex: 3, child: left),
-                const SizedBox(width: 16),
-                Expanded(flex: 2, child: right),
-              ],
-            )
-          : Column(
-              children: [
-                Expanded(child: left),
-                const SizedBox(height: 16),
-                SizedBox(height: 320, child: right),
-              ],
-            ),
+      child: productsAsync.when(
+        data: (products) {
+          // ==== LEFT PANEL: catálogo ====
+          final left = GridView.count(
+            crossAxisCount: isWide ? 3 : 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            children: [
+              for (final p in products)
+                ProductCardPlaceholder(
+                  title: p.name,
+                  price: p.price,
+                  onAdd: () => _inc(
+                    id: p.id,
+                    name: p.name,
+                    price: p.price,
+                    ivaPct: p.ivaPct,
+                  ),
+                ),
+            ],
+          );
+
+          // ==== RIGHT PANEL: carrito ====
+          final right = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Detalle', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: cart.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final line = cart.values.elementAt(i);
+
+                    final baseUnitVal = _baseUnit(line.price, line.ivaPct);
+                    final ivaUnitVal = _ivaUnit(line.price, line.ivaPct);
+
+                    final lineBase = baseUnitVal * line.qty;
+                    final lineIva = ivaUnitVal * line.qty;
+                    final lineTotal = line.price * line.qty;
+
+                    return ListTile(
+                      title: Text(line.name),
+                      subtitle: Text(
+                        // ejemplo:
+                        // $3.00 (IVA incl.) | IVA 15% | Cant: 2
+                        '\$${line.price.toStringAsFixed(2)} (IVA incl.)'
+                        '  |  IVA ${line.ivaPct.toStringAsFixed(0)}%'
+                        '  |  Cant: ${line.qty}',
+                      ),
+                      trailing: SizedBox(
+                        width: 180,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  onPressed: () => _dec(line.id),
+                                  icon: const Icon(Icons.remove),
+                                ),
+                                Text(line.qty.toString()),
+                                IconButton(
+                                  onPressed: () => _inc(
+                                    id: line.id,
+                                    name: line.name,
+                                    price: line.price,
+                                    ivaPct: line.ivaPct,
+                                  ),
+                                  icon: const Icon(Icons.add),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              // mostramos total de esta línea
+                              '\$${lineTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              // desglose interno
+                              'Base: \$${lineBase.toStringAsFixed(2)}\nIVA:  \$${lineIva.toStringAsFixed(2)}',
+                              textAlign: TextAlign.right,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const Divider(),
+              _totalsSection(),
+
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          cart.clear();
+                        });
+                      },
+                      child: const Text('Vaciar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: cart.isEmpty
+                          ? null
+                          : _askCustomerAndRegister,
+                      child: const Text('Registrar (sin imprimir)'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+
+          // ==== responsive layout ====
+          return isWide
+              ? Row(
+                  children: [
+                    Expanded(flex: 3, child: left),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 2, child: right),
+                  ],
+                )
+              : Column(
+                  children: [
+                    Expanded(child: left),
+                    const SizedBox(height: 16),
+                    SizedBox(height: 360, child: right),
+                  ],
+                );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(
+          child: Text('Error cargando productos: $err'),
+        ),
+      ),
     );
   }
 
-  Widget _totals(BuildContext context) {
+  Widget _totalsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _kv('Subtotal', subtotal),
-        _kv('IVA', iva),
-        _kv('Total', total, bold: true),
+        _totalRow('Subtotal (sin IVA)', subtotal),
+        _totalRow('IVA', iva),
+        _totalRow('Total', total, bold: true),
       ],
     );
   }
 
-  Widget _kv(String k, double v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-            Text('\$${v.toStringAsFixed(2)}', style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-          ],
-        ),
-      );
+  Widget _totalRow(String label, double value, {bool bold = false}) {
+    final style = bold
+        ? const TextStyle(fontWeight: FontWeight.bold)
+        : const TextStyle();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text('\$${value.toStringAsFixed(2)}', style: style),
+        ],
+      ),
+    );
+  }
 }
 
 class _CartLine {
+  final int id;
   final String name;
-  final double price;
+  final double price; // ya incluye IVA
   final double ivaPct;
   final int qty;
-  const _CartLine(this.name, this.price, this.ivaPct, this.qty);
-  _CartLine copyWith({int? qty}) => _CartLine(name, price, ivaPct, qty ?? this.qty);
+
+  const _CartLine({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.ivaPct,
+    required this.qty,
+  });
+
+  _CartLine copyWith({int? qty}) {
+    return _CartLine(
+      id: id,
+      name: name,
+      price: price,
+      ivaPct: ivaPct,
+      qty: qty ?? this.qty,
+    );
+  }
 }

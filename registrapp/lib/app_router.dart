@@ -5,6 +5,7 @@ import 'ui/register/register_page.dart';
 import 'ui/orders/orders_page.dart';
 import 'ui/datos/totals_page.dart';
 import 'ui/gastos/expenses_page.dart';
+import 'ui/products/products_page.dart';
 
 final router = GoRouter(
   initialLocation: '/caja',
@@ -27,6 +28,10 @@ final router = GoRouter(
         GoRoute(
           path: '/gastos',
           builder: (context, state) => const ExpensesPage(),
+        ),
+        GoRoute(
+          path: '/productos',
+          builder: (context, state) => const ProductsPage(),
         ),
       ],
     ),
