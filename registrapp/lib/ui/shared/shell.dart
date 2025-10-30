@@ -6,17 +6,16 @@ class Shell extends StatelessWidget {
   final Widget child;
 
   static final _destinations = [
-    _NavItem('/caja',    Icons.point_of_sale,  'Caja'),
-    _NavItem('/pedidos', Icons.list_alt,       'Pedidos'),
-    _NavItem('/datos',   Icons.summarize,      'Datos'),
-    _NavItem('/gastos',  Icons.payments,       'Gastos'),
+    _NavItem('/caja',       Icons.point_of_sale,  'Caja'),
+    _NavItem('/pedidos',    Icons.list_alt,       'Pedidos'),
+    _NavItem('/datos',      Icons.summarize,      'Datos'),
+    _NavItem('/gastos',     Icons.payments,       'Gastos'),
+    _NavItem('/productos',  Icons.inventory,      'Productos'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    // go_router v16: obtener ubicación actual así
     final loc = GoRouterState.of(context).uri.toString();
-
     final index = _destinations.indexWhere((d) => loc.startsWith(d.path));
     final selected = index < 0 ? 0 : index;
 
@@ -54,7 +53,10 @@ class Shell extends StatelessWidget {
         selectedIndex: selected,
         onDestinationSelected: (i) => context.go(_destinations[i].path),
         destinations: _destinations
-            .map((d) => NavigationDestination(icon: Icon(d.icon), label: d.label))
+            .map((d) => NavigationDestination(
+                  icon: Icon(d.icon),
+                  label: d.label,
+                ))
             .toList(),
       ),
     );
