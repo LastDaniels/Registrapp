@@ -17,10 +17,10 @@ class TotalsPage extends StatelessWidget {
         children: [
           Text('Datos (KPIs)', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 12),
-          Wrap(
+          const Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: const [
+            children: [
               _KpiCard(title: '\$ Acumulado del día', value: '\$0.00'),
               _KpiCard(title: 'Cantidad de pedidos', value: '0'),
               _KpiCard(title: 'Ítems más vendidos', value: '—'),
