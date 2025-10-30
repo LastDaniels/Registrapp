@@ -175,7 +175,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
               Expanded(
                 child: ListView.separated(
                   itemCount: cart.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (_, i) {
                     final line = cart.values.elementAt(i);
 
