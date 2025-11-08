@@ -1,40 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/sales_provider.dart';
 
-class OrdersPage extends StatelessWidget {
+class OrdersPage extends ConsumerWidget {
   const OrdersPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Semana 1: mock. Semana 3 conectaremos con DB.
-    final items = List.generate(8, (i) => ('Venta #${101 + i}', 'Cliente: —', '12:${i}0', 0.0));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final salesAsync = ref.watch(todaySalesStreamProvider);
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Pedidos del día', style: Theme.of(context).textTheme.headlineMedium),
+          Text('Pedidos del día',
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 12),
           Expanded(
-            child: GridView.count(
-              crossAxisCount: MediaQuery.of(context).size.width >= 900 ? 3 : 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: [
-                for (final e in items)
-                  Card(
-                    child: ListTile(
-                      title: Text(e.$1),
-                      subtitle: Text('${e.$2}\nTotal: \$${e.$4.toStringAsFixed(2)}'),
-                      isThreeLine: true,
-                      trailing: Text(e.$3),
-                    ),
-                  )
-              ],
+            child: salesAsync.when(
+              data: (sales) {
+                if (sales.isEmpty) {
+                  return const Center(
+                    child: Text('Aún no hay ventas hoy.'),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: sales.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final sale = sales[i];
+                    return ListTile(
+                      leading: const Icon(Icons.receipt_long),
+                      title: Text(
+                        'Venta #${sale.id}  -  \$${sale.total.toStringAsFixed(2)}',
+                      ),
+                      subtitle: Text(
+                        (sale.customerName ?? 'Sin nombre') +
+                            ' • ' +
+                            sale.createdAt.toLocal().toString(),
+                      ),
+                      // aquí más adelante: onTap => ver detalle / reimprimir
+                    );
+                  },
+                );
+              },
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (err, stack) =>
+                  Center(child: Text('Error: $err')),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text('• Aquí agregaremos edición y reimpresión en Semanas 4 y 6.'),
         ],
       ),
     );

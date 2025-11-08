@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/products_provider.dart';
 import '../shared/product_card_placeholder.dart';
+import '../../providers/sales_provider.dart';
+import '../../data/db.dart' show CartItemInput;
+
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -87,12 +90,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     });
   }
 
-  Future<void> _askCustomerAndRegister() async {
+     Future<void> _askCustomerAndRegister() async {
     final ctrl = TextEditingController(text: customer);
 
+    // usamos el rootNavigator para que el diálogo se monte arriba de todo
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
+
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
+      context: rootCtx,
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Confirmar pedido'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -112,27 +118,46 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text('Registrar'),
           ),
         ],
       ),
     );
 
+    // puede que el usuario haya navegado a otra pestaña mientras tanto
+    if (!mounted) return;
+
     if (ok == true) {
+
+      final salesController = ref.read(salesControllerProvider);
+      final items = cart.values.map((line) {
+        return CartItemInput(
+          productId: line.id,
+          productName: line.name,
+          priceWithIva: line.price,
+          ivaPct: line.ivaPct,
+          qty: line.qty,
+        );
+      }).toList();
+
+      await salesController.registerSale(
+        customerName: ctrl.text.trim().isEmpty ? null : ctrl.text.trim(),
+        items: items,
+      );
+
       setState(() {
         customer = ctrl.text.trim();
-        // Semana 2: todavía no guardamos en tabla de ventas.
         cart.clear();
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Venta registrada (sin impresión).')),
+        const SnackBar(content: Text('Venta registrada.')),
       );
     }
   }

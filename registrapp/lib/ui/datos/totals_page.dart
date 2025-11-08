@@ -1,33 +1,215 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/summary_provider.dart';
+import '../../providers/sales_provider.dart';
+import '../../data/db.dart';
 
-class TotalsPage extends StatelessWidget {
+class TotalsPage extends ConsumerStatefulWidget {
   const TotalsPage({super.key});
 
   @override
+  ConsumerState<TotalsPage> createState() => _TotalsPageState();
+}
+
+class _TotalsPageState extends ConsumerState<TotalsPage> {
+  DailySummary? _lastSummary;
+  bool _loading = false;
+
+  Future<void> _loadSummary({bool close = false}) async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+    });
+
+    final controller = ref.read(summaryControllerProvider);
+
+    final DailySummary summary;
+    if (close) {
+      summary = await controller.closeTodayCash();
+    } else {
+      summary = await controller.getTodaySummary();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _lastSummary = summary;
+      _loading = false;
+    });
+
+    _showSummaryDialog(summary, closed: close);
+  }
+
+  void _showSummaryDialog(DailySummary summary, {required bool closed}) {
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
+
+    showDialog(
+      context: rootCtx,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: Text(closed ? 'Caja cerrada' : 'Resumen del día'),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Fecha: ${summary.day.toLocal().toString().split(".").first}',
+                  style: Theme.of(dialogCtx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Text('Subtotal: \$${summary.subtotal.toStringAsFixed(2)}'),
+                Text('IVA:      \$${summary.iva.toStringAsFixed(2)}'),
+                Text(
+                  'TOTAL:    \$${summary.total.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Items vendidos:',
+                  style: Theme.of(dialogCtx)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: 160,
+                  child: summary.items.isEmpty
+                      ? const Text('No hay ventas registradas.')
+                      : ListView.builder(
+                          itemCount: summary.items.length,
+                          itemBuilder: (_, i) {
+                            final it = summary.items[i];
+                            return Text(
+                                '- ${it.name}  x${it.qty}  \$${it.totalAmount.toStringAsFixed(2)}');
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Semana 1: valores de ejemplo. Semana 5 usaremos consulta real.
-    const totalDia = 0.00;
-    const cantPedidos = 0;
-    final topItems = const ['—'];
+    final theme = Theme.of(context);
+    final isWide = MediaQuery.of(context).size.width > 700;
+
+    final salesAsync = ref.watch(todaySalesStreamProvider);
+
+    // calculamos totales rápidos desde las ventas
+    double kpiSubtotal = 0;
+    double kpiIva = 0;
+    double kpiTotal = 0;
+
+    salesAsync.whenData((sales) {
+      for (final s in sales) {
+        kpiSubtotal += s.subtotal;
+        kpiIva += s.iva;
+        kpiTotal += s.total;
+      }
+    });
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Datos (KPIs)', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 12),
-          const Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          Text('Datos', style: theme.textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Aquí puedes ver los totales del día, cerrarlo o imprimir el resumen.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 16),
+
+          // Botones de acción
+          Row(
             children: [
-              _KpiCard(title: '\$ Acumulado del día', value: '\$0.00'),
-              _KpiCard(title: 'Cantidad de pedidos', value: '0'),
-              _KpiCard(title: 'Ítems más vendidos', value: '—'),
+              FilledButton(
+                onPressed:
+                    _loading ? null : () => _loadSummary(close: false),
+                child: const Text('Resumen del día'),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.tonal(
+                onPressed: _loading ? null : () => _loadSummary(close: true),
+                child: const Text('Cerrar caja'),
+              ),
+              if (_loading) ...[
+                const SizedBox(width: 12),
+                const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ]
             ],
           ),
-          const Spacer(),
-          const Text('• Luego conectaremos estos KPIs a la DB y al “recibo largo”.'),
+
+          const SizedBox(height: 20),
+
+          salesAsync.when(
+            data: (_) {
+              if (isWide) {
+                return Row(
+                  children: [
+                    _KpiCard(
+                      title: 'Total del día',
+                      value: '\$${kpiTotal.toStringAsFixed(2)}',
+                      icon: Icons.attach_money,
+                    ),
+                    const SizedBox(width: 12),
+                    _KpiCard(
+                      title: 'Subtotal',
+                      value: '\$${kpiSubtotal.toStringAsFixed(2)}',
+                      icon: Icons.table_rows,
+                    ),
+                    const SizedBox(width: 12),
+                    _KpiCard(
+                      title: 'IVA',
+                      value: '\$${kpiIva.toStringAsFixed(2)}',
+                      icon: Icons.receipt_long,
+                    ),
+                  ],
+                );
+              } else {
+                return Column(
+                  children: [
+                    _KpiCard(
+                      title: 'Total del día',
+                      value: '\$${kpiTotal.toStringAsFixed(2)}',
+                      icon: Icons.attach_money,
+                    ),
+                    const SizedBox(height: 12),
+                    _KpiCard(
+                      title: 'Subtotal',
+                      value: '\$${kpiSubtotal.toStringAsFixed(2)}',
+                      icon: Icons.table_rows,
+                    ),
+                    const SizedBox(height: 12),
+                    _KpiCard(
+                      title: 'IVA',
+                      value: '\$${kpiIva.toStringAsFixed(2)}',
+                      icon: Icons.receipt_long,
+                    ),
+                  ],
+                );
+              }
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => Text('Error: $err'),
+          ),
         ],
       ),
     );
@@ -35,17 +217,48 @@ class TotalsPage extends StatelessWidget {
 }
 
 class _KpiCard extends StatelessWidget {
-  const _KpiCard({required this.title, required this.value});
+  const _KpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
   final String title;
   final String value;
+  final IconData icon;
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 280,
+    final color = Theme.of(context).colorScheme;
+    return Expanded(
       child: Card(
-        child: ListTile(
-          title: Text(title),
-          trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: color.primary.withOpacity(0.1),
+                child: Icon(icon, color: color.primary),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    value,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
