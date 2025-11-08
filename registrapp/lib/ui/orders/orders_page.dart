@@ -14,41 +14,51 @@ class OrdersPage extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Pedidos del día',
-              style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            'Pedidos de hoy (${DateTime.now().toLocal().toString().split(" ").first})',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: salesAsync.when(
               data: (sales) {
                 if (sales.isEmpty) {
                   return const Center(
-                    child: Text('Aún no hay ventas hoy.'),
+                    child: Text('No hay pedidos hoy.'),
                   );
                 }
+
                 return ListView.separated(
                   itemCount: sales.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final sale = sales[i];
+                  itemBuilder: (_, index) {
+                    final sale = sales[index];
+
+                    final displayNumber = index + 1;
+
                     return ListTile(
-                      leading: const Icon(Icons.receipt_long),
+                      leading: CircleAvatar(
+                        child: Text(displayNumber.toString()),
+                      ),
                       title: Text(
-                        'Venta #${sale.id}  -  \$${sale.total.toStringAsFixed(2)}',
+                        'Pedido #$displayNumber  -  \$${sale.total.toStringAsFixed(2)}',
                       ),
                       subtitle: Text(
                         (sale.customerName ?? 'Sin nombre') +
                             ' • ' +
-                            sale.createdAt.toLocal().toString(),
+                            sale.createdAt
+                                .toLocal()
+                                .toString()
+                                .split('.')
+                                .first,
                       ),
-                      // aquí más adelante: onTap => ver detalle / reimprimir
+                      // aquí más adelante poner ver detalle / reimprimir
                     );
                   },
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (err, stack) =>
-                  Center(child: Text('Error: $err')),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, st) => Center(child: Text('Error: $err')),
             ),
           ),
         ],

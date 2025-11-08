@@ -7,12 +7,22 @@ final salesControllerProvider = Provider<SalesController>((ref) {
   return SalesController(db);
 });
 
-// ventas del día actual
+/// ventas del día actual
 final todaySalesStreamProvider =
     StreamProvider.autoDispose<List<Sale>>((ref) {
   final db = ref.watch(dbProvider);
   final now = DateTime.now();
   return db.watchSalesOfDay(now);
+});
+
+/// item más vendido
+final mostSoldItemProvider =
+    FutureProvider.autoDispose<DailySummaryItem?>((ref) async {
+
+  ref.watch(todaySalesStreamProvider);
+
+  final db = ref.watch(dbProvider);
+  return db.getMostSoldItemEver();
 });
 
 class SalesController {

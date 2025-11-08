@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/summary_provider.dart';
 import '../../providers/sales_provider.dart';
+import '../../providers/db_provider.dart';
 import '../../data/db.dart';
 
 class TotalsPage extends ConsumerStatefulWidget {
@@ -21,21 +22,31 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
       _loading = true;
     });
 
-    final controller = ref.read(summaryControllerProvider);
+    final summaryController = ref.read(summaryControllerProvider);
+    final db = ref.read(dbProvider);
 
-    final DailySummary summary;
+    // 1. obtener el resumen
+    final DailySummary summary = close
+        ? await summaryController.closeTodayCash()
+        : await summaryController.getTodaySummary();
+
+    // si la página ya no está montada, salimos
+    if (!mounted) return;
+
+    // 2. si es cerrar caja, borramos las ventas del día
     if (close) {
-      summary = await controller.closeTodayCash();
-    } else {
-      summary = await controller.getTodaySummary();
+      // esto borra sales y sale_items
+      await db.clearDailySales();
+      ref.invalidate(todaySalesStreamProvider);
+
     }
 
-    if (!mounted) return;
     setState(() {
       _lastSummary = summary;
       _loading = false;
     });
 
+    // 3. mostrar diálogo con el resumen
     _showSummaryDialog(summary, closed: close);
   }
 
@@ -105,9 +116,11 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
     final theme = Theme.of(context);
     final isWide = MediaQuery.of(context).size.width > 700;
 
+    // ventas del día (se resetean solas porque la consulta filtra por fecha)
     final salesAsync = ref.watch(todaySalesStreamProvider);
+    // item más vendido en histórico (no se resetea)
+    final bestItemAsync = ref.watch(mostSoldItemProvider);
 
-    // calculamos totales rápidos desde las ventas
     double kpiSubtotal = 0;
     double kpiIva = 0;
     double kpiTotal = 0;
@@ -128,7 +141,7 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
           Text('Datos', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Aquí puedes ver los totales del día, cerrarlo o imprimir el resumen.',
+            'Totales del día (se vacían al cerrar caja) y un KPI histórico.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
@@ -159,6 +172,7 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
 
           const SizedBox(height: 20),
 
+          // KPIs diarios SIEMPRE visibles
           salesAsync.when(
             data: (_) {
               if (isWide) {
@@ -209,6 +223,34 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
             },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Text('Error: $err'),
+          ),
+
+          const SizedBox(height: 16),
+
+          // KPI histórico: item más vendido
+          bestItemAsync.when(
+            data: (item) {
+              return Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.star),
+                  title: const Text('Item más vendido'),
+                  subtitle: Text(
+                    item == null
+                        ? 'Aún no hay ventas'
+                        : '${item.name} — ${item.qty} uds.',
+                  ),
+                  trailing: item == null
+                      ? null
+                      : Text('\$${item.totalAmount.toStringAsFixed(2)}'),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (err, _) =>
+                Text('Error cargando histórico: $err'),
           ),
         ],
       ),
