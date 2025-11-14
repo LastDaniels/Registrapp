@@ -13,7 +13,7 @@ class ProductsPage extends ConsumerStatefulWidget {
 class _ProductsPageState extends ConsumerState<ProductsPage> {
   final _nameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
-
+  static const _iva = 'Precio (IVA incl.)';
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -97,7 +97,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                               const TextInputType.numberWithOptions(
                                   decimal: true),
                           decoration: const InputDecoration(
-                            labelText: 'Precio (IVA incl.)',
+                            labelText: _iva,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -127,7 +127,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
                                 const TextInputType.numberWithOptions(
                                     decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Precio (IVA incl.)',
+                              labelText: _iva,
                             ),
                           ),
                         ),

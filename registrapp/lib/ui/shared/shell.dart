@@ -5,7 +5,7 @@ class Shell extends StatelessWidget {
   const Shell({super.key, required this.child});
   final Widget child;
 
-  static final _destinations = [
+  static const _destinations = [
     _NavItem('/caja',       Icons.point_of_sale,  'Caja'),
     _NavItem('/pedidos',    Icons.list_alt,       'Pedidos'),
     _NavItem('/datos',      Icons.summarize,      'Datos'),

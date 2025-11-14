@@ -1,7 +1,10 @@
+// lib/ui/register/register_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../providers/products_provider.dart';
-import '../shared/product_card_placeholder.dart';
+import '../../providers/sales_provider.dart';
+import '../../data/db.dart' show CartItemInput;
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -11,88 +14,107 @@ class RegisterPage extends ConsumerStatefulWidget {
 }
 
 class _RegisterPageState extends ConsumerState<RegisterPage> {
-  final Map<int, _CartLine> cart = {}; // key = product.id
-  String customer = '';
+  // carrito: productId -> _CartEntry
+  final Map<int, _CartEntry> _cart = {};
+  String _lastCustomer = '';
 
-  // --- helpers de impuestos con IVA incluido ---
-  double _baseUnit(double priceWithIva, double ivaPct) {
+  // helpers de cálculo
+  double get subtotal {
+    double s = 0;
+    _cart.forEach((_, entry) {
+      final base = _baseFromPrice(entry.priceWithIva, entry.ivaPct);
+      s += base * entry.qty;
+    });
+    return s;
+  }
+
+  double get iva {
+    double i = 0;
+    _cart.forEach((_, entry) {
+      final base = _baseFromPrice(entry.priceWithIva, entry.ivaPct);
+      final ivaUnit = entry.priceWithIva - base;
+      i += ivaUnit * entry.qty;
+    });
+    return i;
+  }
+
+  double get total {
+    double t = 0;
+    _cart.forEach((_, entry) {
+      t += entry.priceWithIva * entry.qty;
+    });
+    return t;
+  }
+
+  double _baseFromPrice(double priceWithIva, double ivaPct) {
     final factor = 1 + (ivaPct / 100.0);
     return priceWithIva / factor;
   }
 
-  double _ivaUnit(double priceWithIva, double ivaPct) {
-    return priceWithIva - _baseUnit(priceWithIva, ivaPct);
-  }
-
-  // subtotal sin IVA (suma de bases)
-  double get subtotal {
-    double sum = 0;
-    for (final line in cart.values) {
-      final baseUnit = _baseUnit(line.price, line.ivaPct);
-      sum += baseUnit * line.qty;
-    }
-    return sum;
-  }
-
-  // total IVA (suma de solo IVA)
-  double get iva {
-    double sum = 0;
-    for (final line in cart.values) {
-      final ivaUnit = _ivaUnit(line.price, line.ivaPct);
-      sum += ivaUnit * line.qty;
-    }
-    return sum;
-  }
-
-  // total final cobrado (precio con IVA * qty)
-  double get total {
-    double sum = 0;
-    for (final line in cart.values) {
-      sum += line.price * line.qty;
-    }
-    return sum;
-  }
-
-  void _inc({
+  void _addProduct({
     required int id,
     required String name,
-    required double price,
+    required double priceWithIva,
     required double ivaPct,
   }) {
     setState(() {
-      cart.update(
-        id,
-        (line) => line.copyWith(qty: line.qty + 1),
-        ifAbsent: () => _CartLine(
-          id: id,
+      if (_cart.containsKey(id)) {
+        _cart[id] = _cart[id]!.copyWith(qty: _cart[id]!.qty + 1);
+      } else {
+        _cart[id] = _CartEntry(
+          productId: id,
           name: name,
-          price: price,
+          priceWithIva: priceWithIva,
           ivaPct: ivaPct,
           qty: 1,
-        ),
-      );
-    });
-  }
-
-  void _dec(int id) {
-    setState(() {
-      final line = cart[id];
-      if (line == null) return;
-      final q = line.qty - 1;
-      if (q <= 0) {
-        cart.remove(id);
-      } else {
-        cart[id] = line.copyWith(qty: q);
+        );
       }
     });
   }
 
+  void _increaseQty(int productId) {
+    final entry = _cart[productId];
+    if (entry == null) return;
+    setState(() {
+      _cart[productId] = entry.copyWith(qty: entry.qty + 1);
+    });
+  }
+
+  void _decreaseQty(int productId) {
+    final entry = _cart[productId];
+    if (entry == null) return;
+    setState(() {
+      if (entry.qty <= 1) {
+        _cart.remove(productId);
+      } else {
+        _cart[productId] = entry.copyWith(qty: entry.qty - 1);
+      }
+    });
+  }
+
+  void _clearCart() {
+    setState(() {
+      _cart.clear();
+    });
+  }
+
   Future<void> _askCustomerAndRegister() async {
-    final ctrl = TextEditingController(text: customer);
+    if (_cart.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay productos en el pedido.')),
+      );
+      return;
+    }
+
+    final ctrl = TextEditingController(text: _lastCustomer);
+
+    // usar rootNavigator para evitar pantalla negra
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
 
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
+      context: rootCtx,
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Confirmar pedido'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -112,27 +134,45 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             child: const Text('Registrar'),
           ),
         ],
       ),
     );
 
+    if (!mounted) return;
+
     if (ok == true) {
+      // convertir carrito a lo que espera la DB
+      final salesController = ref.read(salesControllerProvider);
+      final items = _cart.values.map((entry) {
+        return CartItemInput(
+          productId: entry.productId,
+          productName: entry.name,
+          priceWithIva: entry.priceWithIva,
+          ivaPct: entry.ivaPct,
+          qty: entry.qty,
+        );
+      }).toList();
+
+      await salesController.registerSale(
+        customerName: ctrl.text.trim().isEmpty ? null : ctrl.text.trim(),
+        items: items,
+      );
+
       setState(() {
-        customer = ctrl.text.trim();
-        // Semana 2: todavía no guardamos en tabla de ventas.
-        cart.clear();
+        _lastCustomer = ctrl.text.trim();
+        _cart.clear();
       });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Venta registrada (sin impresión).')),
+        const SnackBar(content: Text('Venta registrada.')),
       );
     }
   }
@@ -140,211 +180,362 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsStreamProvider);
-    final isWide = MediaQuery.of(context).size.width >= 900;
+    final size = MediaQuery.of(context).size;
+    final isWide = size.width > 720;
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: productsAsync.when(
-        data: (products) {
-          // ==== LEFT PANEL: catálogo ====
-          final left = GridView.count(
-            crossAxisCount: isWide ? 3 : 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              for (final p in products)
-                ProductCardPlaceholder(
-                  title: p.name,
-                  price: p.price,
-                  onAdd: () => _inc(
-                    id: p.id,
-                    name: p.name,
-                    price: p.price,
-                    ivaPct: p.ivaPct,
-                  ),
-                ),
-            ],
-          );
+    // construimos líneas del carrito para el panel de detalle
+    final cartLines = _cart.values
+        .map(
+          (e) => CartLine(
+            id: e.productId,
+            name: e.name,
+            price: e.priceWithIva,
+            ivaPct: e.ivaPct,
+            qty: e.qty,
+            onIncrease: () => _increaseQty(e.productId),
+            onDecrease: () => _decreaseQty(e.productId),
+          ),
+        )
+        .toList();
 
-          // ==== RIGHT PANEL: carrito ====
-          final right = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Detalle', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: cart.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final line = cart.values.elementAt(i);
-
-                    final baseUnitVal = _baseUnit(line.price, line.ivaPct);
-                    final ivaUnitVal = _ivaUnit(line.price, line.ivaPct);
-
-                    final lineBase = baseUnitVal * line.qty;
-                    final lineIva = ivaUnitVal * line.qty;
-                    final lineTotal = line.price * line.qty;
-
-                    return ListTile(
-                      title: Text(line.name),
-                      subtitle: Text(
-                        // ejemplo:
-                        // $3.00 (IVA incl.) | IVA 15% | Cant: 2
-                        '\$${line.price.toStringAsFixed(2)} (IVA incl.)'
-                        '  |  IVA ${line.ivaPct.toStringAsFixed(0)}%'
-                        '  |  Cant: ${line.qty}',
-                      ),
-                      trailing: SizedBox(
-                        width: 180,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                IconButton(
-                                  onPressed: () => _dec(line.id),
-                                  icon: const Icon(Icons.remove),
-                                ),
-                                Text(line.qty.toString()),
-                                IconButton(
-                                  onPressed: () => _inc(
-                                    id: line.id,
-                                    name: line.name,
-                                    price: line.price,
-                                    ivaPct: line.ivaPct,
-                                  ),
-                                  icon: const Icon(Icons.add),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              // mostramos total de esta línea
-                              '\$${lineTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              // desglose interno
-                              'Base: \$${lineBase.toStringAsFixed(2)}\nIVA:  \$${lineIva.toStringAsFixed(2)}',
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const Divider(),
-              _totalsSection(),
-
-              const SizedBox(height: 8),
-              Row(
+    return Scaffold(
+      backgroundColor: const Color(0xfff2f2f6),
+      body: SafeArea(
+        child: isWide
+            ? Row(
                 children: [
+                  // panel de productos
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        setState(() {
-                          cart.clear();
-                        });
+                    flex: 2,
+                    child: productsAsync.when(
+                      data: (products) {
+                        if (products.isEmpty) {
+                          return const Center(
+                            child: Text('No hay productos.'),
+                          );
+                        }
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.4,
+                          ),
+                          itemCount: products.length,
+                          itemBuilder: (_, index) {
+                            final p = products[index];
+                            return InkWell(
+                              onTap: () => _addProduct(
+                                id: p.id,
+                                name: p.name,
+                                priceWithIva: p.price,
+                                ivaPct: p.ivaPct,
+                              ),
+                              child: Card(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                          '\$${p.price.toStringAsFixed(2)} (IVA incl.)'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
                       },
-                      child: const Text('Vaciar'),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, st) => Center(
+                        child: Text('Error: $err'),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  // panel de detalle
+                  SizedBox(
+                    width: 360,
+                    child: _DetailPanel(
+                      items: cartLines,
+                      onClear: _clearCart,
+                      onRegister: _askCustomerAndRegister,
+                      subtotal: subtotal,
+                      iva: iva,
+                      total: total,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  // en pantallas angostas, productos arriba
                   Expanded(
-                    child: FilledButton(
-                      onPressed: cart.isEmpty
-                          ? null
-                          : _askCustomerAndRegister,
-                      child: const Text('Registrar (sin imprimir)'),
+                    child: productsAsync.when(
+                      data: (products) {
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: products.length,
+                          itemBuilder: (_, index) {
+                            final p = products[index];
+                            return ListTile(
+                              title: Text(p.name),
+                              subtitle: Text(
+                                  '\$${p.price.toStringAsFixed(2)} (IVA incl.)'),
+                              onTap: () => _addProduct(
+                                id: p.id,
+                                name: p.name,
+                                priceWithIva: p.price,
+                                ivaPct: p.ivaPct,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, st) => Center(
+                        child: Text('Error: $err'),
+                      ),
+                    ),
+                  ),
+                  // y detalle abajo
+                  SizedBox(
+                    height: 300,
+                    child: _DetailPanel(
+                      items: cartLines,
+                      onClear: _clearCart,
+                      onRegister: _askCustomerAndRegister,
+                      subtotal: subtotal,
+                      iva: iva,
+                      total: total,
                     ),
                   ),
                 ],
               ),
-            ],
-          );
-
-          // ==== responsive layout ====
-          return isWide
-              ? Row(
-                  children: [
-                    Expanded(flex: 3, child: left),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 2, child: right),
-                  ],
-                )
-              : Column(
-                  children: [
-                    Expanded(child: left),
-                    const SizedBox(height: 16),
-                    SizedBox(height: 360, child: right),
-                  ],
-                );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Text('Error cargando productos: $err'),
-        ),
-      ),
-    );
-  }
-
-  Widget _totalsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _totalRow('Subtotal (sin IVA)', subtotal),
-        _totalRow('IVA', iva),
-        _totalRow('Total', total, bold: true),
-      ],
-    );
-  }
-
-  Widget _totalRow(String label, double value, {bool bold = false}) {
-    final style = bold
-        ? const TextStyle(fontWeight: FontWeight.bold)
-        : const TextStyle();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: style),
-          Text('\$${value.toStringAsFixed(2)}', style: style),
-        ],
       ),
     );
   }
 }
 
-class _CartLine {
-  final int id;
+// ======================================================
+//   Widgets de detalle (parte derecha) SIN overflow
+// ======================================================
+
+class _DetailPanel extends StatelessWidget {
+  const _DetailPanel({
+    required this.items,
+    required this.onClear,
+    required this.onRegister,
+    required this.subtotal,
+    required this.iva,
+    required this.total,
+  });
+
+  final List<CartLine> items;
+  final VoidCallback onClear;
+  final VoidCallback onRegister;
+  final double subtotal;
+  final double iva;
+  final double total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // título
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              'Detalle',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          // lista scrollable
+          Expanded(
+            child: items.isEmpty
+                ? const Center(child: Text('Sin productos'))
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, index) {
+                      final line = items[index];
+                      return _DetailLine(line: line);
+                    },
+                  ),
+          ),
+          // totales
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _totalRow('Subtotal (sin IVA)', subtotal),
+                _totalRow('IVA', iva),
+                const Divider(),
+                _totalRow('Total', total, isBold: true),
+              ],
+            ),
+          ),
+          // botones fijos abajo
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onClear,
+                    child: const Text('Vaciar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onRegister,
+                    child: const Text('Registrar (sin imprimir)'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalRow(String label, double value, {bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label),
+        Text(
+          '\$${value.toStringAsFixed(2)}',
+          style: isBold
+              ? const TextStyle(fontWeight: FontWeight.bold)
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.line});
+
+  final CartLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // info
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                line.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '\$${line.price.toStringAsFixed(2)} (IVA incl.)  |  IVA ${line.ivaPct.toStringAsFixed(1)}%  | Cant: ${line.qty}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        // controles
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.remove, size: 18),
+              onPressed: line.onDecrease,
+            ),
+            Text('${line.qty}'),
+            IconButton(
+              icon: const Icon(Icons.add, size: 18),
+              onPressed: line.onIncrease,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ======================================================
+//   Modelos/chismecitos internos de la página
+// ======================================================
+
+class _CartEntry {
+  final int productId;
   final String name;
-  final double price; // ya incluye IVA
+  final double priceWithIva;
   final double ivaPct;
   final int qty;
 
-  const _CartLine({
+  _CartEntry({
+    required this.productId,
+    required this.name,
+    required this.priceWithIva,
+    required this.ivaPct,
+    required this.qty,
+  });
+
+  _CartEntry copyWith({
+    int? productId,
+    String? name,
+    double? priceWithIva,
+    double? ivaPct,
+    int? qty,
+  }) {
+    return _CartEntry(
+      productId: productId ?? this.productId,
+      name: name ?? this.name,
+      priceWithIva: priceWithIva ?? this.priceWithIva,
+      ivaPct: ivaPct ?? this.ivaPct,
+      qty: qty ?? this.qty,
+    );
+    }
+}
+
+class CartLine {
+  final int id;
+  final String name;
+  final double price;
+  final double ivaPct;
+  final int qty;
+  final VoidCallback onIncrease;
+  final VoidCallback onDecrease;
+
+  CartLine({
     required this.id,
     required this.name,
     required this.price,
     required this.ivaPct,
     required this.qty,
+    required this.onIncrease,
+    required this.onDecrease,
   });
-
-  _CartLine copyWith({int? qty}) {
-    return _CartLine(
-      id: id,
-      name: name,
-      price: price,
-      ivaPct: ivaPct,
-      qty: qty ?? this.qty,
-    );
-  }
 }
