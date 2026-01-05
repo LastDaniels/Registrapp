@@ -111,6 +111,38 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
     );
   }
 
+  Future<void> _confirmCloseCash() async {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+
+    final bool? confirm = await showDialog<bool>(
+      context: rootContext,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('Confirmar cierre de caja'),
+          content: const Text(
+            '¿Está seguro de que desea cerrar la caja del día?\n\n'
+                'Esta acción eliminará todas las ventas registradas hoy y no se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('Cerrar caja'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _loadSummary(close: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -156,7 +188,7 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
               ),
               const SizedBox(width: 12),
               FilledButton.tonal(
-                onPressed: _loading ? null : () => _loadSummary(close: true),
+                onPressed: _loading ? null : _confirmCloseCash,
                 child: const Text('Cerrar caja'),
               ),
               if (_loading) ...[
