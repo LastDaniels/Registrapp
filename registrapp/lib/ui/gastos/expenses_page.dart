@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/expenses_provider.dart';
 
-class ExpensesPage extends StatefulWidget {
+
+class ExpensesPage extends ConsumerStatefulWidget {
   const ExpensesPage({super.key});
   @override
-  State<ExpensesPage> createState() => _ExpensesPageState();
+  ConsumerState<ExpensesPage> createState() => _ExpensesPageState();
 }
 
-class _ExpensesPageState extends State<ExpensesPage> {
+class _ExpensesPageState extends ConsumerState<ExpensesPage> {
   // Categorías de ejemplo. Luego serán configurables.
   final cats = const ['Insumos', 'Transporte', 'Servicios', 'Otros'];
   String? selected;
@@ -18,24 +21,35 @@ class _ExpensesPageState extends State<ExpensesPage> {
     super.dispose();
   }
 
-  void _addExpense() {
-    final ok = double.tryParse(amountCtrl.text);
-    if (selected == null || ok == null || ok <= 0) {
+  Future<void> _addExpense() async {
+    final value = double.tryParse(amountCtrl.text);
+
+    if (selected == null || value == null || value <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona una categoría e ingresa un monto válido.')),
+        const SnackBar(
+          content: Text('Selecciona una categoría e ingresa un monto válido.'),
+        ),
       );
       return;
     }
-    // Semana 1: solo feedback. Semana 5 guardamos y sumamos al total del día.
+
+    final controller = ref.read(expensesControllerProvider);
+    await controller.addExpense(category: selected!, amount: value);
+
     amountCtrl.clear();
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Gasto agregado a "$selected".')),
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width >= 900;
+    final expensesAsync = ref.watch(todayExpensesStreamProvider);
+    double totalExpenses = 0;
 
     final grid = GridView.count(
       crossAxisCount: isWide ? 3 : 2,
@@ -74,9 +88,13 @@ class _ExpensesPageState extends State<ExpensesPage> {
             FilledButton(onPressed: _addExpense, child: const Text('Agregar gasto')),
             const Spacer(),
             const Divider(),
-            const ListTile(
-              title: Text('Total gastos del día'),
-              trailing: Text('\$0.00'),
+             ListTile(
+              title: const Text('Total gastos del día'),
+              trailing: expensesAsync.when(
+                data: (_) => Text('\$${totalExpenses.toStringAsFixed(2)}'),
+                loading: () => const Text('...'),
+                error: (e, _) => const Text('—'),
+              ),
             ),
             const SizedBox(height: 8),
             const Text('• Al final del día se resta de lo generado para la ganancia.'),
@@ -84,6 +102,12 @@ class _ExpensesPageState extends State<ExpensesPage> {
         ),
       ),
     );
+
+
+
+    expensesAsync.whenData((list) {
+      totalExpenses = list.fold(0.0, (s, e) => s + e.amount);
+    });
 
     return Padding(
       padding: const EdgeInsets.all(16),

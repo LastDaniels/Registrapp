@@ -10,6 +10,8 @@ import 'tables/product_table.dart';
 import 'tables/sales_table.dart';
 import 'tables/sale_items_table.dart';
 import 'tables/cash_closures_table.dart';
+import 'tables/expenses_table.dart';
+
 
 part 'db.g.dart';
 
@@ -19,6 +21,7 @@ part 'db.g.dart';
     Sales,
     SaleItems,
     CashClosures,
+    Expenses,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -26,7 +29,7 @@ class AppDatabase extends _$AppDatabase {
 
   // subimos versión porque agregamos tablas nuevas
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   // migración sencilla: si vienes de una versión anterior, crea las nuevas tablas
   @override
@@ -40,6 +43,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(sales);
             await m.createTable(saleItems);
             await m.createTable(cashClosures);
+          }
+          if (from < 3) {
+            await m.createTable(expenses);
           }
         },
       );
@@ -147,6 +153,56 @@ class AppDatabase extends _$AppDatabase {
           ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]))
         .watch();
   }
+
+  // =========================================================
+//                      GASTOS
+// =========================================================
+
+  Future<int> insertExpense({
+    required String category,
+    required double amount,
+  }) {
+    return into(expenses).insert(
+      ExpensesCompanion.insert(
+        category: category,
+        amount: amount,
+      ),
+    );
+  }
+
+  Stream<List<Expense>> watchExpensesOfDay(DateTime day) {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
+
+    return (select(expenses)
+      ..where((tbl) =>
+      tbl.createdAt.isBiggerOrEqualValue(start) &
+      tbl.createdAt.isSmallerThanValue(end))
+      ..orderBy([(e) => OrderingTerm.desc(e.createdAt)]))
+        .watch();
+  }
+
+  Future<double> getExpensesTotalOfDay(DateTime day) async {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
+
+    final row = await customSelect(
+      '''
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM expenses
+    WHERE created_at >= ? AND created_at < ?
+    ''',
+      variables: [Variable<DateTime>(start), Variable<DateTime>(end)],
+      readsFrom: {expenses},
+    ).getSingle();
+
+    return (row.data['total'] as num).toDouble();
+  }
+
+  Future<void> clearDailyExpenses() async {
+    await delete(expenses).go();
+  }
+
 
   // =========================================================
   //                  RESÚMENES Y CIERRE DE CAJA

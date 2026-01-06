@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/summary_provider.dart';
 import '../../providers/sales_provider.dart';
 import '../../providers/db_provider.dart';
+import '../../providers/expenses_provider.dart';
 import '../../data/db.dart';
 
 class TotalsPage extends ConsumerStatefulWidget {
@@ -37,7 +38,9 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
     if (close) {
       // esto borra sales y sale_items
       await db.clearDailySales();
+      await db.clearDailyExpenses();
       ref.invalidate(todaySalesStreamProvider);
+      ref.invalidate(todayExpensesStreamProvider);
 
     }
 
@@ -150,6 +153,9 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
 
     // ventas del día (se resetean solas porque la consulta filtra por fecha)
     final salesAsync = ref.watch(todaySalesStreamProvider);
+
+    final expensesAsync = ref.watch(todayExpensesStreamProvider);
+
     // item más vendido en histórico (no se resetea)
     final bestItemAsync = ref.watch(mostSoldItemProvider);
 
@@ -164,6 +170,15 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
         kpiTotal += s.total;
       }
     });
+
+    double totalExpenses = 0;
+
+    expensesAsync.whenData((list) {
+      totalExpenses = list.fold(0.0, (s, e) => s + e.amount);
+    });
+
+    final netProfit = kpiTotal - totalExpenses;
+
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -255,6 +270,50 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
             },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => Text('Error: $err'),
+          ),
+
+          const SizedBox(height: 12),
+
+          //KPI de gastos
+
+          expensesAsync.when(
+            data: (_) {
+              if (isWide) {
+                return Row(
+                  children: [
+                    _KpiCard(
+                      title: 'Gastos del día',
+                      value: '-\$${totalExpenses.toStringAsFixed(2)}',
+                      icon: Icons.money_off,
+                    ),
+                    const SizedBox(width: 12),
+                    _KpiCard(
+                      title: 'Ganancia neta',
+                      value: '\$${netProfit.toStringAsFixed(2)}',
+                      icon: Icons.trending_up,
+                    ),
+                  ],
+                );
+              } else {
+                return Column(
+                  children: [
+                    _KpiCard(
+                      title: 'Gastos del día',
+                      value: '-\$${totalExpenses.toStringAsFixed(2)}',
+                      icon: Icons.money_off,
+                    ),
+                    const SizedBox(height: 12),
+                    _KpiCard(
+                      title: 'Ganancia neta',
+                      value: '\$${netProfit.toStringAsFixed(2)}',
+                      icon: Icons.trending_up,
+                    ),
+                  ],
+                );
+              }
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (e, _) => Text('Error gastos: $e'),
           ),
 
           const SizedBox(height: 16),
