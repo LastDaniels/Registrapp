@@ -28,9 +28,12 @@ class Shell extends StatelessWidget {
             NavigationRail(
               selectedIndex: selected,
               labelType: NavigationRailLabelType.all,
-              leading: const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: FlutterLogo(size: 42),
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Image.asset(
+                  'assets/registrapp_asset.png',
+                  height: 80,
+                ),
               ),
               destinations: _destinations
                   .map((d) => NavigationRailDestination(
