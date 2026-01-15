@@ -29,7 +29,7 @@ class AppDatabase extends _$AppDatabase {
 
   // subimos versión porque agregamos tablas nuevas
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   // migración sencilla: si vienes de una versión anterior, crea las nuevas tablas
   @override
@@ -47,6 +47,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(expenses);
           }
+          if (from < 4) {
+            await m.addColumn(sales, sales.status);
+          }
+
         },
       );
 
@@ -154,34 +158,43 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
   Stream<List<SaleWithItems>> watchSalesOfDayWithItems(DateTime day) {
-  final start = DateTime(day.year, day.month, day.day);
-  final end = start.add(const Duration(days: 1));
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
 
-  final q = (select(sales)
-    ..where((s) =>
-        s.createdAt.isBiggerOrEqualValue(start) &
-        s.createdAt.isSmallerThanValue(end))
-    ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]));
+    final q = (select(sales)
+      ..where((s) =>
+          s.createdAt.isBiggerOrEqualValue(start) &
+          s.createdAt.isSmallerThanValue(end))
+      ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]));
 
-  return q.watch().asyncMap((rows) async {
-    final result = <SaleWithItems>[];
+    return q.watch().asyncMap((rows) async {
+      final result = <SaleWithItems>[];
 
-    for (final sale in rows) {
-      final items = await (select(saleItems)
-            ..where((i) => i.saleId.equals(sale.id)))
-          .get();
+      for (final sale in rows) {
+        final items = await (select(saleItems)
+              ..where((i) => i.saleId.equals(sale.id)))
+            .get();
 
-      result.add(
-        SaleWithItems(
-          sale: sale,
-          items: items,
-        ),
-      );
-    }
+        result.add(
+          SaleWithItems(
+            sale: sale,
+            items: items,
+          ),
+        );
+      }
 
-    return result;
-  });
-}
+      return result;
+    });
+  }
+  Future<void> updateSaleStatus(int saleId, String status) {
+    return (update(sales)
+          ..where((s) => s.id.equals(saleId)))
+        .write(
+          SalesCompanion(
+            status: Value(status),
+          ),
+        );
+  }
 
 
   // =========================================================
