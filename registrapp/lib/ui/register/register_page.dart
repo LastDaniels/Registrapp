@@ -413,7 +413,7 @@ class _DetailPanel extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: onRegister,
-                    child: const Text('Registrar (sin imprimir)'),
+                    child: const Text('Registrar'),
                   ),
                 ),
               ],
