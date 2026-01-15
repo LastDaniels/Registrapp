@@ -409,6 +409,16 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -417,6 +427,7 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     subtotal,
     iva,
     total,
+    status,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -472,6 +483,12 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
     } else if (isInserting) {
       context.missing(_totalMeta);
     }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
     return context;
   }
 
@@ -505,6 +522,10 @@ class $SalesTable extends Sales with TableInfo<$SalesTable, Sale> {
         DriftSqlType.double,
         data['${effectivePrefix}total'],
       )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
     );
   }
 
@@ -521,6 +542,7 @@ class Sale extends DataClass implements Insertable<Sale> {
   final double subtotal;
   final double iva;
   final double total;
+  final String status;
   const Sale({
     required this.id,
     required this.createdAt,
@@ -528,6 +550,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     required this.subtotal,
     required this.iva,
     required this.total,
+    required this.status,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -540,6 +563,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     map['subtotal'] = Variable<double>(subtotal);
     map['iva'] = Variable<double>(iva);
     map['total'] = Variable<double>(total);
+    map['status'] = Variable<String>(status);
     return map;
   }
 
@@ -553,6 +577,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       subtotal: Value(subtotal),
       iva: Value(iva),
       total: Value(total),
+      status: Value(status),
     );
   }
 
@@ -568,6 +593,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       subtotal: serializer.fromJson<double>(json['subtotal']),
       iva: serializer.fromJson<double>(json['iva']),
       total: serializer.fromJson<double>(json['total']),
+      status: serializer.fromJson<String>(json['status']),
     );
   }
   @override
@@ -580,6 +606,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       'subtotal': serializer.toJson<double>(subtotal),
       'iva': serializer.toJson<double>(iva),
       'total': serializer.toJson<double>(total),
+      'status': serializer.toJson<String>(status),
     };
   }
 
@@ -590,6 +617,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     double? subtotal,
     double? iva,
     double? total,
+    String? status,
   }) => Sale(
     id: id ?? this.id,
     createdAt: createdAt ?? this.createdAt,
@@ -597,6 +625,7 @@ class Sale extends DataClass implements Insertable<Sale> {
     subtotal: subtotal ?? this.subtotal,
     iva: iva ?? this.iva,
     total: total ?? this.total,
+    status: status ?? this.status,
   );
   Sale copyWithCompanion(SalesCompanion data) {
     return Sale(
@@ -608,6 +637,7 @@ class Sale extends DataClass implements Insertable<Sale> {
       subtotal: data.subtotal.present ? data.subtotal.value : this.subtotal,
       iva: data.iva.present ? data.iva.value : this.iva,
       total: data.total.present ? data.total.value : this.total,
+      status: data.status.present ? data.status.value : this.status,
     );
   }
 
@@ -619,14 +649,15 @@ class Sale extends DataClass implements Insertable<Sale> {
           ..write('customerName: $customerName, ')
           ..write('subtotal: $subtotal, ')
           ..write('iva: $iva, ')
-          ..write('total: $total')
+          ..write('total: $total, ')
+          ..write('status: $status')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, createdAt, customerName, subtotal, iva, total);
+      Object.hash(id, createdAt, customerName, subtotal, iva, total, status);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -636,7 +667,8 @@ class Sale extends DataClass implements Insertable<Sale> {
           other.customerName == this.customerName &&
           other.subtotal == this.subtotal &&
           other.iva == this.iva &&
-          other.total == this.total);
+          other.total == this.total &&
+          other.status == this.status);
 }
 
 class SalesCompanion extends UpdateCompanion<Sale> {
@@ -646,6 +678,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
   final Value<double> subtotal;
   final Value<double> iva;
   final Value<double> total;
+  final Value<String> status;
   const SalesCompanion({
     this.id = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -653,6 +686,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     this.subtotal = const Value.absent(),
     this.iva = const Value.absent(),
     this.total = const Value.absent(),
+    this.status = const Value.absent(),
   });
   SalesCompanion.insert({
     this.id = const Value.absent(),
@@ -661,6 +695,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     required double subtotal,
     required double iva,
     required double total,
+    this.status = const Value.absent(),
   }) : subtotal = Value(subtotal),
        iva = Value(iva),
        total = Value(total);
@@ -671,6 +706,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Expression<double>? subtotal,
     Expression<double>? iva,
     Expression<double>? total,
+    Expression<String>? status,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -679,6 +715,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       if (subtotal != null) 'subtotal': subtotal,
       if (iva != null) 'iva': iva,
       if (total != null) 'total': total,
+      if (status != null) 'status': status,
     });
   }
 
@@ -689,6 +726,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     Value<double>? subtotal,
     Value<double>? iva,
     Value<double>? total,
+    Value<String>? status,
   }) {
     return SalesCompanion(
       id: id ?? this.id,
@@ -697,6 +735,7 @@ class SalesCompanion extends UpdateCompanion<Sale> {
       subtotal: subtotal ?? this.subtotal,
       iva: iva ?? this.iva,
       total: total ?? this.total,
+      status: status ?? this.status,
     );
   }
 
@@ -721,6 +760,9 @@ class SalesCompanion extends UpdateCompanion<Sale> {
     if (total.present) {
       map['total'] = Variable<double>(total.value);
     }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
     return map;
   }
 
@@ -732,7 +774,8 @@ class SalesCompanion extends UpdateCompanion<Sale> {
           ..write('customerName: $customerName, ')
           ..write('subtotal: $subtotal, ')
           ..write('iva: $iva, ')
-          ..write('total: $total')
+          ..write('total: $total, ')
+          ..write('status: $status')
           ..write(')'))
         .toString();
   }
@@ -2272,6 +2315,7 @@ typedef $$SalesTableCreateCompanionBuilder =
       required double subtotal,
       required double iva,
       required double total,
+      Value<String> status,
     });
 typedef $$SalesTableUpdateCompanionBuilder =
     SalesCompanion Function({
@@ -2281,6 +2325,7 @@ typedef $$SalesTableUpdateCompanionBuilder =
       Value<double> subtotal,
       Value<double> iva,
       Value<double> total,
+      Value<String> status,
     });
 
 final class $$SalesTableReferences
@@ -2341,6 +2386,11 @@ class $$SalesTableFilterComposer extends Composer<_$AppDatabase, $SalesTable> {
 
   ColumnFilters<double> get total => $composableBuilder(
     column: $table.total,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2408,6 +2458,11 @@ class $$SalesTableOrderingComposer
     column: $table.total,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SalesTableAnnotationComposer
@@ -2438,6 +2493,9 @@ class $$SalesTableAnnotationComposer
 
   GeneratedColumn<double> get total =>
       $composableBuilder(column: $table.total, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 
   Expression<T> saleItemsRefs<T extends Object>(
     Expression<T> Function($$SaleItemsTableAnnotationComposer a) f,
@@ -2499,6 +2557,7 @@ class $$SalesTableTableManager
                 Value<double> subtotal = const Value.absent(),
                 Value<double> iva = const Value.absent(),
                 Value<double> total = const Value.absent(),
+                Value<String> status = const Value.absent(),
               }) => SalesCompanion(
                 id: id,
                 createdAt: createdAt,
@@ -2506,6 +2565,7 @@ class $$SalesTableTableManager
                 subtotal: subtotal,
                 iva: iva,
                 total: total,
+                status: status,
               ),
           createCompanionCallback:
               ({
@@ -2515,6 +2575,7 @@ class $$SalesTableTableManager
                 required double subtotal,
                 required double iva,
                 required double total,
+                Value<String> status = const Value.absent(),
               }) => SalesCompanion.insert(
                 id: id,
                 createdAt: createdAt,
@@ -2522,6 +2583,7 @@ class $$SalesTableTableManager
                 subtotal: subtotal,
                 iva: iva,
                 total: total,
+                status: status,
               ),
           withReferenceMapper: (p0) => p0
               .map(

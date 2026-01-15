@@ -14,4 +14,7 @@ class Sales extends Table {
   RealColumn get subtotal => real()();     // sin IVA
   RealColumn get iva => real()();          // solo IVA
   RealColumn get total => real()();        // con IVA
+  TextColumn get status =>
+    text().withDefault(const Constant('pending'))();
+
 }

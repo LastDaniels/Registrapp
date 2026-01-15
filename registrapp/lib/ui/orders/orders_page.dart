@@ -35,17 +35,38 @@ class OrdersPage extends ConsumerWidget {
                     final sw = sales[index];
                     final sale = sw.sale;
                     final items = sw.items;
-
-
+                    final isDelivered = sale.status == 'delivered';
                     final displayNumber = index + 1;
 
                     return ExpansionTile(
                       leading: CircleAvatar(
                         child: Text(displayNumber.toString()),
                       ),
-                      title: Text(
-                        'Pedido #$displayNumber  -  \$${sale.total.toStringAsFixed(2)}',
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Pedido #$displayNumber  -  \$${sale.total.toStringAsFixed(2)}',
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDelivered ? Colors.green[100] : Colors.orange[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isDelivered ? 'Entregado' : 'Pendiente',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDelivered ? Colors.green[800] : Colors.orange[800],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+
                       subtitle: Text(
                         '${sale.customerName ?? 'Sin nombre'} • '
                         '${sale.createdAt.toLocal().toString().split(".").first}',
@@ -76,6 +97,26 @@ class OrdersPage extends ConsumerWidget {
                             ),
                           ),
                         ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Marcar como entregado'),
+                              Checkbox(
+                                value: isDelivered,
+                                onChanged: (v) {
+                                  final ctrl = ref.read(salesControllerProvider);
+                                  ctrl.setDelivered(
+                                    saleId: sale.id,
+                                    delivered: v ?? false,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+
                       ],
                     );
 

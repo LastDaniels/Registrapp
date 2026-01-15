@@ -38,4 +38,14 @@ class SalesController {
       items: items,
     );
   }
+  Future<void> setDelivered({
+    required int saleId,
+    required bool delivered,
+  }) {
+    return _db.updateSaleStatus(
+      saleId,
+      delivered ? 'delivered' : 'pending',
+    );
+  }
+
 }
