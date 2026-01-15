@@ -384,7 +384,7 @@ class _DetailPanel extends StatelessWidget {
                     },
                   ),
           ),
-          // totales
+          // total
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
