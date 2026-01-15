@@ -338,13 +338,53 @@ class AppDatabase extends _$AppDatabase {
       totalAmount: (row.data['total_amount'] as num).toDouble(),
     );
   }
+  Future<DailySummaryItem?> getMostSoldItemOfDay(DateTime day) async {
+    final start = DateTime(day.year, day.month, day.day);
+    final end = start.add(const Duration(days: 1));
+
+    final rows = await customSelect(
+      '''
+      SELECT product_name AS name,
+            SUM(qty) AS total_qty,
+            SUM(price_with_iva * qty) AS total_amount
+      FROM sale_items
+      WHERE sale_id IN (
+        SELECT id FROM sales
+        WHERE created_at >= ? AND created_at < ?
+      )
+      GROUP BY product_name
+      ORDER BY total_qty DESC
+      LIMIT 1
+      ''',
+      variables: [
+        Variable<DateTime>(start),
+        Variable<DateTime>(end),
+      ],
+      readsFrom: {saleItems, sales},
+    ).get();
+
+    if (rows.isEmpty) return null;
+
+    final row = rows.first;
+    return DailySummaryItem(
+      name: row.data['name'] as String,
+      qty: row.data['total_qty'] as int,
+      totalAmount: (row.data['total_amount'] as num).toDouble(),
+    );
+  }
 
   Future<void> clearDailySales() async {
   await transaction(() async {
     await delete(saleItems).go(); // borra los detalles de los pedidos
     await delete(sales).go(); // borra las ventas principales
-  });
-}
+    });
+  }
+  Future<void> deleteSaleById(int saleId) async {
+    await transaction(() async {
+      await (delete(saleItems)..where((i) => i.saleId.equals(saleId))).go();
+      await (delete(sales)..where((s) => s.id.equals(saleId))).go();
+    });
+  }
 
 
   /// Cierra la caja de un día: guarda el cierre y devuelve el mismo resumen.

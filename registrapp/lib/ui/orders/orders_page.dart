@@ -37,6 +37,35 @@ class OrdersPage extends ConsumerWidget {
                     final items = sw.items;
                     final isDelivered = sale.status == 'delivered';
                     final displayNumber = index + 1;
+                    Future<void> confirmDelete() async {
+                      final rootCtx = Navigator.of(context, rootNavigator: true).context;
+
+                      final ok = await showDialog<bool>(
+                        context: rootCtx,
+                        builder: (dialogCtx) => AlertDialog(
+                          title: const Text('Eliminar pedido'),
+                          content: const Text('¿Seguro que deseas eliminar este pedido? Esta acción no se puede deshacer.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogCtx, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(dialogCtx, true),
+                              child: const Text('Eliminar'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (ok == true) {
+                        final ctrl = ref.read(salesControllerProvider);
+                        await ctrl.deleteSale(saleId: sale.id);
+
+                        ref.invalidate(todaySalesStreamProvider);
+                        ref.invalidate(mostSoldItemProvider);
+                      }
+                    }
 
                     return ExpansionTile(
                       leading: CircleAvatar(
@@ -64,8 +93,15 @@ class OrdersPage extends ConsumerWidget {
                               ),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: confirmDelete,
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            tooltip: 'Eliminar pedido',
+                          ),
                         ],
                       ),
+
 
                       subtitle: Text(
                         '${sale.customerName ?? 'Sin nombre'} • '

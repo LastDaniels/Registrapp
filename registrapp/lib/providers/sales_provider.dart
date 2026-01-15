@@ -18,12 +18,11 @@ final todaySalesStreamProvider =
 /// item más vendido
 final mostSoldItemProvider =
     FutureProvider.autoDispose<DailySummaryItem?>((ref) async {
-
   ref.watch(todaySalesStreamProvider);
-
   final db = ref.watch(dbProvider);
-  return db.getMostSoldItemEver();
+  return db.getMostSoldItemOfDay(DateTime.now());
 });
+
 
 class SalesController {
   SalesController(this._db);
@@ -47,5 +46,9 @@ class SalesController {
       delivered ? 'delivered' : 'pending',
     );
   }
+  Future<void> deleteSale({required int saleId}) {
+    return _db.deleteSaleById(saleId);
+  }
+
 
 }

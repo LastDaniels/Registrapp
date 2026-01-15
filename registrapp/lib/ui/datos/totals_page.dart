@@ -322,28 +322,26 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
           // KPI histórico: item más vendido
           bestItemAsync.when(
             data: (item) {
+              if (item == null) {
+                return const SizedBox.shrink();
+              }
+
               return Card(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ListTile(
                   leading: const Icon(Icons.star),
-                  title: const Text('Item más vendido'),
-                  subtitle: Text(
-                    item == null
-                        ? 'Aún no hay ventas'
-                        : '${item.name} — ${item.qty} uds.',
-                  ),
-                  trailing: item == null
-                      ? null
-                      : Text('\$${item.totalAmount.toStringAsFixed(2)}'),
+                  title: const Text('Item más vendido (hoy)'),
+                  subtitle: Text('${item.name} — ${item.qty} uds.'),
+                  trailing: Text('\$${item.totalAmount.toStringAsFixed(2)}'),
                 ),
               );
             },
             loading: () => const SizedBox.shrink(),
-            error: (err, _) =>
-                Text('Error cargando histórico: $err'),
+            error: (err, _) => const SizedBox.shrink(),
           ),
+
         ],
       ),
     );
