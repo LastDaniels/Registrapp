@@ -88,16 +88,7 @@ class _ExpensesPageState extends ConsumerState<ExpensesPage> {
             FilledButton(onPressed: _addExpense, child: const Text('Agregar gasto')),
             const Spacer(),
             const Divider(),
-             ListTile(
-              title: const Text('Total gastos del día'),
-              trailing: expensesAsync.when(
-                data: (_) => Text('\$${totalExpenses.toStringAsFixed(2)}'),
-                loading: () => const Text('...'),
-                error: (e, _) => const Text('—'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text('• Al final del día se resta de lo generado para la ganancia.'),
+
           ],
         ),
       ),
