@@ -153,6 +153,36 @@ class AppDatabase extends _$AppDatabase {
           ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]))
         .watch();
   }
+  Stream<List<SaleWithItems>> watchSalesOfDayWithItems(DateTime day) {
+  final start = DateTime(day.year, day.month, day.day);
+  final end = start.add(const Duration(days: 1));
+
+  final q = (select(sales)
+    ..where((s) =>
+        s.createdAt.isBiggerOrEqualValue(start) &
+        s.createdAt.isSmallerThanValue(end))
+    ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]));
+
+  return q.watch().asyncMap((rows) async {
+    final result = <SaleWithItems>[];
+
+    for (final sale in rows) {
+      final items = await (select(saleItems)
+            ..where((i) => i.saleId.equals(sale.id)))
+          .get();
+
+      result.add(
+        SaleWithItems(
+          sale: sale,
+          items: items,
+        ),
+      );
+    }
+
+    return result;
+  });
+}
+
 
   // =========================================================
 //                      GASTOS
@@ -380,6 +410,16 @@ class DailySummaryItem {
     required this.totalAmount,
   });
 }
+class SaleWithItems {
+  final Sale sale;
+  final List<SaleItem> items;
+
+  SaleWithItems({
+    required this.sale,
+    required this.items,
+  });
+}
+
 
 // =========================================================
 //                 CONEXIÓN A LA BD FÍSICA

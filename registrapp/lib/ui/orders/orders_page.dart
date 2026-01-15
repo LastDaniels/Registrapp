@@ -32,11 +32,14 @@ class OrdersPage extends ConsumerWidget {
                   itemCount: sales.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, index) {
-                    final sale = sales[index];
+                    final sw = sales[index];
+                    final sale = sw.sale;
+                    final items = sw.items;
+
 
                     final displayNumber = index + 1;
 
-                    return ListTile(
+                    return ExpansionTile(
                       leading: CircleAvatar(
                         child: Text(displayNumber.toString()),
                       ),
@@ -44,16 +47,38 @@ class OrdersPage extends ConsumerWidget {
                         'Pedido #$displayNumber  -  \$${sale.total.toStringAsFixed(2)}',
                       ),
                       subtitle: Text(
-                        (sale.customerName ?? 'Sin nombre') +
-                            ' • ' +
-                            sale.createdAt
-                                .toLocal()
-                                .toString()
-                                .split('.')
-                                .first,
+                        '${sale.customerName ?? 'Sin nombre'} • '
+                        '${sale.createdAt.toLocal().toString().split(".").first}',
                       ),
-                      // aquí más adelante poner ver detalle / reimprimir
+                      children: [
+                        for (final it in items)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text('${it.qty} × ${it.productName}'),
+                                ),
+                                Text('\$${(it.priceWithIva * it.qty).toStringAsFixed(2)}'),
+
+                              ],
+                            ),
+                          ),
+                        const Divider(),
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              'Total: \$${sale.total.toStringAsFixed(2)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
+
                   },
                 );
               },

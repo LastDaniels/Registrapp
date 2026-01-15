@@ -9,11 +9,11 @@ final salesControllerProvider = Provider<SalesController>((ref) {
 
 /// ventas del día actual
 final todaySalesStreamProvider =
-    StreamProvider.autoDispose<List<Sale>>((ref) {
+    StreamProvider.autoDispose<List<SaleWithItems>>((ref) {
   final db = ref.watch(dbProvider);
-  final now = DateTime.now();
-  return db.watchSalesOfDay(now);
+  return db.watchSalesOfDayWithItems(DateTime.now());
 });
+
 
 /// item más vendido
 final mostSoldItemProvider =

@@ -164,12 +164,13 @@ class _TotalsPageState extends ConsumerState<TotalsPage> {
     double kpiTotal = 0;
 
     salesAsync.whenData((sales) {
-      for (final s in sales) {
-        kpiSubtotal += s.subtotal;
-        kpiIva += s.iva;
-        kpiTotal += s.total;
-      }
-    });
+    for (final sw in sales) {
+      kpiSubtotal += sw.sale.subtotal;
+      kpiIva += sw.sale.iva;
+      kpiTotal += sw.sale.total;
+    }
+  });
+
 
     double totalExpenses = 0;
 
