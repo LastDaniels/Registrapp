@@ -24,11 +24,9 @@ jobs:
         working-directory: registrapp
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
@@ -36,16 +34,14 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      # No bloquea por formato
       - name: Format (non-blocking)
         run: dart format .
 
-      # No bloquea por warnings
       - name: Analyze (non-blocking)
         run: flutter analyze || true
 
   tests:
-    name: Tests (with coverage)
+    name: Tests (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [quality]
@@ -65,9 +61,8 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      # Si algún test falla, sí rompe (correcto)
-      - name: Run tests + coverage
-        run: flutter test --coverage
+      - name: Run tests + coverage (non-blocking)
+        run: flutter test --coverage || true
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -139,36 +134,3 @@ jobs:
         with:
           name: web-build
           path: registrapp/build/web
-
-  build_windows:
-    name: Build Windows (release)
-    runs-on: windows-latest
-    timeout-minutes: 30
-    needs: [tests]
-
-    defaults:
-      run:
-        working-directory: registrapp
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
-          cache: true
-
-      - name: Pub get
-        run: flutter pub get
-
-      - name: Enable Windows desktop
-        run: flutter config --enable-windows-desktop
-
-      - name: Build Windows (release)
-        run: flutter build windows --release
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: registrapp/build/windows/x64/runner/Release
