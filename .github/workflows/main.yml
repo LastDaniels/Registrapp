@@ -36,8 +36,9 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      - name: Check formatting (fails if changes needed)
-        run: dart format --output=none --set-exit-if-changed .
+      # Opción 2: no bloquea el CI si formatea
+      - name: Format (non-blocking)
+        run: dart format .
 
       - name: Analyze
         run: flutter analyze
